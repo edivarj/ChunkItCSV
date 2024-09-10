@@ -4,6 +4,34 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>File Splitter</title>
+    <style>
+        #progressBar {
+            width: 100%;
+            background-color: #f3f3f3;
+            border: 1px solid #ddd;
+            margin-top: 10px;
+        }
+        #progressBar div {
+            height: 20px;
+            background-color: #4caf50;
+            width: 0%;
+            text-align: center;
+            color: white;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: center;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+    </style>
 </head>
 <body>
     <h1>File Splitter</h1>
@@ -11,18 +39,31 @@
         <label for="fileInput">Select File:</label>
         <input type="file" id="fileInput" accept=".csv" required>
         <br>
-        <label for="sizeInput">Max Size (MB):</label>
-        <input type="number" id="sizeInput" min="1" value="50" required>
+        <label for="partsInput">Number of Parts:</label>
+        <input type="number" id="partsInput" min="1" value="1" required>
         <br>
         <button type="button" onclick="splitFile()">Split File</button>
     </form>
+    <div id="progressBar"><div id="progressBarFill">0%</div></div>
     <div id="downloadLinks"></div>
+    <table id="partsTable">
+        <thead>
+            <tr>
+                <th>Part Number</th>
+                <th>Download Link</th>
+            </tr>
+        </thead>
+        <tbody>
+        </tbody>
+    </table>
 
     <script>
         function splitFile() {
             const fileInput = document.getElementById('fileInput');
-            const sizeInput = document.getElementById('sizeInput');
+            const partsInput = document.getElementById('partsInput');
             const downloadLinks = document.getElementById('downloadLinks');
+            const progressBarFill = document.getElementById('progressBarFill');
+            const partsTableBody = document.querySelector('#partsTable tbody');
 
             if (fileInput.files.length === 0) {
                 alert('Please select a file.');
@@ -30,34 +71,36 @@
             }
 
             const file = fileInput.files[0];
-            const maxSize = parseInt(sizeInput.value) * 1024 * 1024; // Convert MB to bytes
+            const numberOfParts = parseInt(partsInput.value);
             const reader = new FileReader();
-            let fileCount = 1;
+            let currentPart = 0;
+            let totalLines = 0;
 
             reader.onload = function(event) {
                 const text = event.target.result;
                 const lines = text.split('\n');
-                let fileSize = 0;
-                let part = [];
+                totalLines = lines.length;
+                const linesPerPart = Math.ceil(totalLines / numberOfParts);
+                let completedParts = 0;
 
-                downloadLinks.innerHTML = ''; // Clear previous download links
+                // Clear previous download links and table rows
+                downloadLinks.innerHTML = '';
+                partsTableBody.innerHTML = '';
 
-                for (let line of lines) {
-                    const lineSize = new Blob([line]).size;
-
-                    if (fileSize + lineSize > maxSize) {
-                        downloadPart(part, fileCount);
-                        fileCount++;
-                        part = [];
-                        fileSize = 0;
+                function processPart(startIndex, endIndex) {
+                    const partLines = lines.slice(startIndex, endIndex).filter(line => line.trim() !== '');
+                    if (partLines.length > 0) {
+                        downloadPart(partLines, currentPart + 1);
+                        completedParts++;
+                        updateProgressBar((completedParts / numberOfParts) * 100);
                     }
-
-                    part.push(line);
-                    fileSize += lineSize;
                 }
 
-                if (part.length > 0) {
-                    downloadPart(part, fileCount);
+                for (let i = 0; i < numberOfParts; i++) {
+                    const startIndex = i * linesPerPart;
+                    const endIndex = Math.min(startIndex + linesPerPart, totalLines);
+                    processPart(startIndex, endIndex);
+                    currentPart++;
                 }
             };
 
@@ -71,8 +114,22 @@
             a.href = url;
             a.download = `part_${count}.csv`;
             a.textContent = `Download part ${count}`;
-            document.getElementById('downloadLinks').appendChild(a);
-            document.getElementById('downloadLinks').appendChild(document.createElement('br'));
+
+            const tableRow = document.createElement('tr');
+            const partNumberCell = document.createElement('td');
+            partNumberCell.textContent = count;
+            const downloadLinkCell = document.createElement('td');
+            downloadLinkCell.appendChild(a);
+
+            tableRow.appendChild(partNumberCell);
+            tableRow.appendChild(downloadLinkCell);
+            document.querySelector('#partsTable tbody').appendChild(tableRow);
+        }
+
+        function updateProgressBar(percentage) {
+            const progressBarFill = document.getElementById('progressBarFill');
+            progressBarFill.style.width = percentage + '%';
+            progressBarFill.textContent = Math.round(percentage) + '%';
         }
     </script>
 </body>
